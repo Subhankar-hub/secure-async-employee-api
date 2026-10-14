@@ -58,6 +58,26 @@ mvn verify                    # unit and integration tests (uses PostgreSQL)
 mvn spring-boot:run           # start the API on http://localhost:8080
 ```
 
+### Run a packaged jar
+
+Build the jar (the runnable file is the one without `-sources` or `-javadoc` in the name):
+
+```bash
+mvn -DskipTests package
+# target/secure-async-employee-api-1.0.0.jar
+```
+
+The jar does not read a `.env` file. Whoever runs it needs Java 21, a PostgreSQL database set up as in section 1, and the variables from section 2 exported in the same shell. Give them the jar and a filled-in `.env` (do not commit that file). `DB_PASSWORD` must be the password used when `app_user` was created.
+
+```bash
+set -a
+source .env          # path to the env file, if it is not in the current directory
+set +a
+java -jar secure-async-employee-api-1.0.0.jar
+```
+
+The API listens on http://localhost:8080. Flyway creates the tables in `DB_SCHEMA` on startup. The schema itself must already exist; the jar does not create the database or the role.
+
 ## Endpoints
 
 Every endpoint except the token endpoint needs the header `Authorization: Bearer <token>`.
