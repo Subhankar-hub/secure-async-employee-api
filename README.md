@@ -48,6 +48,18 @@ htpasswd -bnBC 12 "" 'my-client-secret' | tr -d ':\n'; echo
 
 Put the hash in single quotes in `.env`, because it contains `$` characters.
 
+A hash cannot be turned back into the secret, so keep the plaintext secrets for local testing in `.env.secrets`. That file is git-ignored and the app does not read it.
+
+```bash
+A=$(openssl rand -hex 16); S=$(openssl rand -hex 16)
+(umask 077; printf 'assessment_client=%s\nsecondary_client=%s\n' "$A" "$S" > .env.secrets)
+htpasswd -bnBC 12 "" "$A" | tr -d ':\n'; echo   # -> ASSESSMENT_CLIENT_SECRET_HASH
+htpasswd -bnBC 12 "" "$S" | tr -d ':\n'; echo   # -> SECONDARY_CLIENT_SECRET_HASH
+unset A S
+```
+
+The app reads the hashes only at startup. After changing them in `.env`, stop the app, run `set -a; source .env; set +a` again, and restart it. Otherwise token requests fail.
+
 ## 3. Run and test
 
 ```bash
@@ -77,11 +89,10 @@ If someone receives only the jar, they need Java 21, PostgreSQL 14+, `htpasswd` 
 psql -h localhost -U postgres -v app_password='choose-a-db-password' -f setup.sql
 ```
 
-**2. Create a client secret and its hash.** `.env` stores only the BCrypt hash, and a hash cannot be turned back into the secret. Keep the plaintext secret somewhere safe, because it is what you send when requesting a token.
+**2. Create client secrets and their hashes** as described in section 2: plaintext goes in `.env.secrets` and hashes go in `.env`. Also generate a value for `JWT_SECRET`:
 
 ```bash
-htpasswd -bnBC 12 "" 'choose-a-client-secret' | tr -d ':\n'; echo
-openssl rand -base64 48      # value for JWT_SECRET
+openssl rand -base64 48
 ```
 
 **3. Create `.env`** from `.env.example`. Fill in `DB_PASSWORD`, `JWT_SECRET` and `ASSESSMENT_CLIENT_SECRET_HASH`, and put the hash in single quotes. You can leave `SECONDARY_CLIENT_SECRET_HASH` empty.
@@ -95,14 +106,15 @@ java -jar secure-async-employee-api-1.0.0.jar
 
 The API listens on http://localhost:8080. Flyway creates the tables on startup. The database, role and schema must already exist from step 1.
 
-**5. Test with curl** in a second terminal. Use the plaintext secret from step 2, not the hash. In zsh, paste the commands without `#` comment lines, or run `setopt interactivecomments` first.
+**5. Test with curl** in a second terminal. The plaintext secret is read from `.env.secrets`, not the hash from `.env`. In zsh, paste the commands without `#` comment lines, or run `setopt interactivecomments` first.
 
 ```bash
 BASE=http://localhost:8080/api/v1
-SECRET='choose-a-client-secret'
+SECRET=$(grep '^assessment_client=' .env.secrets | cut -d= -f2-)
 TOKEN=$(curl -s -X POST $BASE/auth/token -H 'Content-Type: application/json' \
   -d "{\"client_id\":\"assessment_client\",\"client_secret\":\"$SECRET\"}" \
   | python3 -c 'import sys,json;print(json.load(sys.stdin).get("access_token",""))')
+unset SECRET
 [ -n "$TOKEN" ] && echo "token ok" || echo "token failed: check the secret and hash"
 
 TXN=$(curl -s -X POST $BASE/transactions/init -H "Authorization: Bearer $TOKEN" \
@@ -119,7 +131,9 @@ curl -s $BASE/transactions/$TXN/employees -H "Authorization: Bearer $TOKEN"; ech
 
 Expected results: the submit returns `HTTP 202`, the status call returns `COMPLETED`, and the last call returns the saved record. Use a new PAN for each run, because a repeated PAN ends as `FAILED` with `DUPLICATE_PAN`.
 
-If the token fails, everything after it also fails. Init returns `401`, `TXN` stays empty, and the URL becomes `/transactions//employees`, which returns `400`. Fix the secret first. If you change the hash in `.env`, restart the jar, because it reads the hash only at startup.
+If the token fails, everything after it also fails. Init returns `401`, `TXN` stays empty, and the URL becomes `/transactions//employees`, which returns `400`. Fix the token first. The usual causes are:
+- `.env.secrets` is missing or was regenerated without updating the hashes in `.env`.
+- The hashes in `.env` were changed but the app was not restarted. It reads them only at startup.
 
 ## Endpoints
 
