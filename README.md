@@ -67,16 +67,59 @@ mvn -DskipTests package
 # target/secure-async-employee-api-1.0.0.jar
 ```
 
-The jar does not read a `.env` file. Whoever runs it needs Java 21, a PostgreSQL database set up as in section 1, and the variables from section 2 exported in the same shell. Give them the jar and a filled-in `.env` (do not commit that file). `DB_PASSWORD` must be the password used when `app_user` was created.
+### Running the jar on another machine
+
+If someone receives only the jar, they need Java 21, PostgreSQL 14+, `htpasswd` (package `apache2-utils`) and `curl`. Share `db/setup.sql` and `.env.example` with the jar, but not your own `.env`. They should create their own secrets.
+
+**1. Create the database.** The password chosen here becomes `DB_PASSWORD`:
 
 ```bash
-set -a
-source .env          # path to the env file, if it is not in the current directory
-set +a
+psql -h localhost -U postgres -v app_password='choose-a-db-password' -f setup.sql
+```
+
+**2. Create a client secret and its hash.** `.env` stores only the BCrypt hash, and a hash cannot be turned back into the secret. Keep the plaintext secret somewhere safe, because it is what you send when requesting a token.
+
+```bash
+htpasswd -bnBC 12 "" 'choose-a-client-secret' | tr -d ':\n'; echo
+openssl rand -base64 48      # value for JWT_SECRET
+```
+
+**3. Create `.env`** from `.env.example`. Fill in `DB_PASSWORD`, `JWT_SECRET` and `ASSESSMENT_CLIENT_SECRET_HASH`, and put the hash in single quotes. You can leave `SECONDARY_CLIENT_SECRET_HASH` empty.
+
+**4. Start the API.** The jar does not read `.env` by itself, so export the variables in the same shell first. Otherwise startup fails with `password authentication failed for user "${DB_USERNAME}"`.
+
+```bash
+set -a; source .env; set +a
 java -jar secure-async-employee-api-1.0.0.jar
 ```
 
-The API listens on http://localhost:8080. Flyway creates the tables in `DB_SCHEMA` on startup. The schema itself must already exist; the jar does not create the database or the role.
+The API listens on http://localhost:8080. Flyway creates the tables on startup. The database, role and schema must already exist from step 1.
+
+**5. Test with curl** in a second terminal. Use the plaintext secret from step 2, not the hash. In zsh, paste the commands without `#` comment lines, or run `setopt interactivecomments` first.
+
+```bash
+BASE=http://localhost:8080/api/v1
+SECRET='choose-a-client-secret'
+TOKEN=$(curl -s -X POST $BASE/auth/token -H 'Content-Type: application/json' \
+  -d "{\"client_id\":\"assessment_client\",\"client_secret\":\"$SECRET\"}" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin).get("access_token",""))')
+[ -n "$TOKEN" ] && echo "token ok" || echo "token failed: check the secret and hash"
+
+TXN=$(curl -s -X POST $BASE/transactions/init -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin).get("transaction_id",""))')
+echo $TXN
+
+curl -s -w '\nHTTP %{http_code}\n' -X POST $BASE/transactions/$TXN/employees \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Test User","dob":"1995-08-20","gender":"FEMALE","pan":"TESTA0001Z","mobile_number":"8123456789"}'
+
+curl -s $BASE/transactions/$TXN -H "Authorization: Bearer $TOKEN"; echo
+curl -s $BASE/transactions/$TXN/employees -H "Authorization: Bearer $TOKEN"; echo
+```
+
+Expected results: the submit returns `HTTP 202`, the status call returns `COMPLETED`, and the last call returns the saved record. Use a new PAN for each run, because a repeated PAN ends as `FAILED` with `DUPLICATE_PAN`.
+
+If the token fails, everything after it also fails. Init returns `401`, `TXN` stays empty, and the URL becomes `/transactions//employees`, which returns `400`. Fix the secret first. If you change the hash in `.env`, restart the jar, because it reads the hash only at startup.
 
 ## Endpoints
 
