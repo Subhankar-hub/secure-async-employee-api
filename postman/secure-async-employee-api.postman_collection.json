@@ -1,0 +1,109 @@
+{
+  "info": {
+    "name": "Secure Async Employee API",
+    "description": "Token -> init -> submit -> poll status -> retrieve employee. Set client_secret in the collection variables (do not commit real secrets).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080" },
+    { "key": "client_id", "value": "assessment_client" },
+    { "key": "client_secret", "value": "" },
+    { "key": "access_token", "value": "" },
+    { "key": "transaction_id", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "1. Issue access token",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK', () => pm.response.to.have.status(200));",
+          "const body = pm.response.json();",
+          "pm.test('Bearer token, 1800s', () => { pm.expect(body.token_type).to.eql('Bearer'); pm.expect(body.expires_in).to.eql(1800); });",
+          "pm.collectionVariables.set('access_token', body.access_token);"
+        ] }
+      }],
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/v1/auth/token",
+        "body": { "mode": "raw", "raw": "{\n  \"client_id\": \"{{client_id}}\",\n  \"client_secret\": \"{{client_secret}}\"\n}" }
+      }
+    },
+    {
+      "name": "1b. Invalid credentials (401)",
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('401', () => pm.response.to.have.status(401));"] } }],
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/v1/auth/token",
+        "body": { "mode": "raw", "raw": "{\n  \"client_id\": \"{{client_id}}\",\n  \"client_secret\": \"wrong\"\n}" }
+      }
+    },
+    {
+      "name": "2. Initialize transaction",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('201 Created', () => pm.response.to.have.status(201));",
+          "const body = pm.response.json();",
+          "pm.test('INITIALIZED', () => pm.expect(body.status).to.eql('INITIALIZED'));",
+          "pm.collectionVariables.set('transaction_id', body.transaction_id);"
+        ] }
+      }],
+      "request": { "method": "POST", "header": [], "url": "{{base_url}}/api/v1/transactions/init" }
+    },
+    {
+      "name": "3. Submit employee (202)",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
+          "pm.test('ACCEPTED', () => pm.expect(pm.response.json().status).to.eql('ACCEPTED'));"
+        ] }
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/v1/transactions/{{transaction_id}}/employees",
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Amit Kumar\",\n  \"dob\": \"1990-05-15\",\n  \"gender\": \"MALE\",\n  \"pan\": \"ABCDE1234F\",\n  \"mobile_number\": \"9876543210\"\n}" }
+      }
+    },
+    {
+      "name": "3b. Submit invalid employee (400)",
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('400', () => pm.response.to.have.status(400));"] } }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/v1/transactions/{{transaction_id}}/employees",
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"A1\",\n  \"dob\": \"2999-01-01\",\n  \"gender\": \"X\",\n  \"pan\": \"abcde1234f\",\n  \"mobile_number\": \"12345\"\n}" }
+      }
+    },
+    {
+      "name": "4. Get transaction status",
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"] } }],
+      "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/transactions/{{transaction_id}}" }
+    },
+    {
+      "name": "5. Get saved employee",
+      "event": [{
+        "listen": "test",
+        "script": { "exec": [
+          "pm.test('200 OK (409 if still processing)', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));"
+        ] }
+      }],
+      "request": { "method": "GET", "header": [], "url": "{{base_url}}/api/v1/transactions/{{transaction_id}}/employees" }
+    },
+    {
+      "name": "6. Missing token (401)",
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('401', () => pm.response.to.have.status(401));"] } }],
+      "request": { "auth": { "type": "noauth" }, "method": "POST", "header": [], "url": "{{base_url}}/api/v1/transactions/init" }
+    }
+  ]
+}

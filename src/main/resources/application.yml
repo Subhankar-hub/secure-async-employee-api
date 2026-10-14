@@ -1,0 +1,55 @@
+spring:
+  application:
+    name: secure-async-employee-api
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:app_db}?currentSchema=${DB_SCHEMA:app_schema_dev}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: ${DB_SCHEMA:app_schema_dev}
+  flyway:
+    schemas: ${DB_SCHEMA:app_schema_dev}
+    default-schema: ${DB_SCHEMA:app_schema_dev}
+    create-schemas: false
+    # Allows migrating a schema that already holds unrelated tables; version 0 keeps V1 and later applied.
+    baseline-on-migrate: true
+    baseline-version: 0
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    mapper:
+      allow-coercion-of-scalars: false
+    deserialization:
+      fail-on-null-for-primitives: true
+
+logging:
+  level:
+    # Logs raw SQL error details such as "Key (pan)=(...) already exists"; failures are logged safely by the app.
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: OFF
+
+server:
+  error:
+    include-stacktrace: never
+    include-message: never
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET}
+      issuer: ${JWT_ISSUER:secure-async-employee-api}
+      ttl-seconds: 1800
+    clients:
+      - client-id: ${ASSESSMENT_CLIENT_ID:assessment_client}
+        secret-hash: ${ASSESSMENT_CLIENT_SECRET_HASH}
+        scopes: [transactions:write, transactions:read]
+      - client-id: ${SECONDARY_CLIENT_ID:secondary_client}
+        secret-hash: ${SECONDARY_CLIENT_SECRET_HASH:}
+        scopes: [transactions:write, transactions:read]
+  async:
+    core-pool-size: ${ASYNC_CORE_POOL_SIZE:4}
+    max-pool-size: ${ASYNC_MAX_POOL_SIZE:8}
+    queue-capacity: ${ASYNC_QUEUE_CAPACITY:100}

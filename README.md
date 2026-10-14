@@ -1,0 +1,167 @@
+# Secure Asynchronous Employee REST API
+
+A Spring Boot API where an authenticated client:
+
+1. Gets an access token using a client ID and secret.
+2. Starts a transaction.
+3. Submits employee data. The API replies `202 Accepted` at once and saves the record in the background.
+4. Checks the transaction status and reads the saved employee record from PostgreSQL.
+
+**Tech:** Java 21, Spring Boot 3.5, Spring Security (JWT), Spring Data JPA, PostgreSQL, Flyway, JUnit 5, Mockito.
+
+## Requirements
+
+- Java 21
+- Maven 3.9+
+- PostgreSQL 14+ (verified on 17.11)
+
+## 1. Database setup
+
+Run once as the PostgreSQL admin user:
+
+```bash
+psql -h localhost -U postgres -v app_password='choose-a-password' -f db/setup.sql
+```
+
+This creates the `app_user` role (not a superuser), the `app_db` database, and two schemas: `app_schema_dev` (app) and `app_schema_test` (tests). Flyway creates the tables when the app starts.
+
+## 2. Configuration
+
+```bash
+cp .env.example .env     # .env is git-ignored; fill in the values
+```
+
+| Variable | Description |
+|---|---|
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_SCHEMA` | Default to `localhost`, `5432`, `app_db`, `app_schema_dev` |
+| `DB_USERNAME`, `DB_PASSWORD` | Database login (required) |
+| `JWT_SECRET` | Token signing key of at least 32 characters, e.g. `openssl rand -base64 48` |
+| `ASSESSMENT_CLIENT_SECRET_HASH` | BCrypt hash of the `assessment_client` secret (required) |
+| `SECONDARY_CLIENT_SECRET_HASH` | BCrypt hash of the `secondary_client` secret (optional) |
+| `TEST_DB_SCHEMA` | Schema for integration tests (default `app_schema_test`) |
+
+Client secrets are stored only as BCrypt hashes. To create one:
+
+```bash
+htpasswd -bnBC 12 "" 'my-client-secret' | tr -d ':\n'; echo
+```
+
+Put the hash in single quotes in `.env`, because it contains `$` characters.
+
+## 3. Run and test
+
+```bash
+set -a; source .env; set +a   # load the environment variables
+
+mvn test                      # unit tests (no database needed)
+mvn verify                    # unit and integration tests (uses PostgreSQL)
+mvn spring-boot:run           # start the API on http://localhost:8080
+```
+
+## Endpoints
+
+Every endpoint except the token endpoint needs the header `Authorization: Bearer <token>`.
+
+| Method | Path | Result |
+|---|---|---|
+| POST | `/api/v1/auth/token` | `200` with the token |
+| POST | `/api/v1/transactions/init` | `201` with a new transaction ID |
+| POST | `/api/v1/transactions/{id}/employees` | `202`; the record is saved in the background |
+| GET | `/api/v1/transactions/{id}` | `200` with the status |
+| GET | `/api/v1/transactions/{id}/employees` | `200` with the saved record |
+
+**Token request:**
+```json
+{ "client_id": "assessment_client", "client_secret": "your-secret" }
+```
+Response: `{ "access_token": "...", "token_type": "Bearer", "expires_in": 1800 }`
+
+**Employee request:**
+```json
+{ "name": "Amit Kumar", "dob": "1990-05-15", "gender": "MALE", "pan": "ABCDE1234F", "mobile_number": "9876543210" }
+```
+
+**Status responses:**
+```json
+{ "transaction_id": "TXN-8F21A9C4D2E7B610", "status": "COMPLETED", "message": "Employee data saved successfully" }
+{ "transaction_id": "TXN-8F21A9C4D2E7B610", "status": "FAILED", "error": { "code": "DUPLICATE_PAN", "message": "Employee PAN already exists" } }
+```
+
+A transaction moves through these statuses: `INITIALIZED` -> `ACCEPTED` -> `PROCESSING` -> `COMPLETED` or `FAILED`.
+
+## Validation rules
+
+| Field | Rule |
+|---|---|
+| `name` | 2-100 characters: letters, spaces, `.`, `'`, `-` (leading and trailing spaces are trimmed) |
+| `dob` | `YYYY-MM-DD`, a real date in the past |
+| `gender` | `MALE`, `FEMALE` or `OTHER` (any letter case) |
+| `pan` | 5 uppercase letters, 4 digits, 1 uppercase letter, e.g. `ABCDE1234F`; must be unique |
+| `mobile_number` | A string of 10 digits starting with 6, 7, 8 or 9 |
+
+## HTTP status codes
+
+| Code | When |
+|---|---|
+| 200 / 201 / 202 | Success |
+| 400 | Invalid JSON or invalid field; `details` explains each failing field |
+| 401 | Missing, invalid or expired token, or wrong client credentials |
+| 403 | The token lacks the required permission (scope) |
+| 404 | The transaction doesn't exist or belongs to another client |
+| 409 | Duplicate PAN, data already submitted for this transaction, or record not ready yet |
+| 500 | Unexpected error (generic message only) |
+
+Error format:
+```json
+{ "timestamp": "...", "status": 400, "error": "Bad Request", "code": "VALIDATION_FAILED",
+  "message": "Employee validation failed", "details": { "pan": "PAN must be 5 uppercase letters, 4 digits and 1 uppercase letter" } }
+```
+
+## Quick demo with curl
+
+```bash
+BASE=http://localhost:8080/api/v1
+
+TOKEN=$(curl -s -X POST $BASE/auth/token -H 'Content-Type: application/json' \
+  -d '{"client_id":"assessment_client","client_secret":"<secret>"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
+
+TXN=$(curl -s -X POST $BASE/transactions/init -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["transaction_id"])')
+
+curl -s -X POST $BASE/transactions/$TXN/employees -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Amit Kumar","dob":"1990-05-15","gender":"MALE","pan":"ABCDE1234F","mobile_number":"9876543210"}'
+
+curl -s $BASE/transactions/$TXN -H "Authorization: Bearer $TOKEN"
+curl -s $BASE/transactions/$TXN/employees -H "Authorization: Bearer $TOKEN"
+```
+
+To see the error cases:
+
+- Submit to the same transaction again: `409`.
+- Submit the same PAN in a new transaction: `409 DUPLICATE_PAN`.
+- Read the transaction with a `secondary_client` token: `404`.
+- Call any endpoint without a token: `401`.
+
+A Postman collection is in `postman/secure-async-employee-api.postman_collection.json`.
+
+## Project structure
+
+```
+src/main/java/com/example/employeeapi/
+  auth/         token endpoint, client check, JWT creation
+  config/       security, JWT, async executor, JSON settings
+  transaction/  transaction entity, status changes, controller
+  employee/     validation, submission, background worker, saving
+  error/        shared error responses
+src/main/resources/db/migration/   Flyway SQL (tables and constraints)
+src/test/java/                     unit tests (*Test) and integration tests (*IT)
+db/setup.sql                       database, role and schema setup
+```
+
+## Notes and limitations
+
+- Background processing runs in an in-memory thread pool, not a durable queue. If the app crashes after replying `202`, that submission is lost and the transaction stays `ACCEPTED` or `PROCESSING`.
+- A `FAILED` or `COMPLETED` transaction can't be reused; start a new one.
+- Tokens expire after 30 minutes and can't be revoked earlier.
+- PAN uniqueness is enforced by a database constraint. If two requests race past the duplicate check, the losing one ends as `FAILED` with `DUPLICATE_PAN`.
+- Logs never contain tokens, secrets, full PANs or mobile numbers.
