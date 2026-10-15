@@ -257,10 +257,10 @@ A Postman collection is in `postman/secure-async-employee-api.postman_collection
 
 GitHub Actions workflows live in `.github/workflows/`.
 
-- **CI** (`ci.yml`) runs on pull requests and on pushes to `main`/`master`. It builds with Java 21 and runs `mvn verify` (unit tests and integration tests) against PostgreSQL 17. Integration tests use the `app_schema_test` schema created by the workflow; they do not read `.env` or `.env.secrets`.
-- **Release** (`release.yml`) runs when you publish a GitHub Release. It rebuilds, re-runs `mvn verify`, and attaches the runnable jar (`target/secure-async-employee-api-<version>.jar`), `db/setup.sql`, and `.env.example` to that release.
+- **CI** (`ci.yml`) runs on pull requests and on pushes to `main`/`dev`. It builds with Java 21 and runs `mvn verify` (unit tests and integration tests) against PostgreSQL 17. Integration tests use the `app_schema_test` schema created by the workflow; they do not read `.env` or `.env.secrets`.
+- **Release** (`release.yml`) runs on every push to `dev`, and also when you publish a GitHub Release. It rebuilds, re-runs `mvn verify`, and attaches the runnable jar (`target/secure-async-employee-api-<version>.jar`), `db/setup.sql`, and `.env.example`.
 
-To publish a package: create a git tag, then **Releases → Draft a new release** for that tag and publish it. After the workflow finishes, download the jar from the release assets. Recipients still need Java 21 and PostgreSQL; follow **Running the jar on another machine** above.
+Pushes to `dev` update a rolling prerelease tagged `dev` (not marked as Latest). A versioned package still comes from **Releases → Draft a new release**. Recipients need Java 21 and PostgreSQL; follow **Running the jar on another machine** above.
 
 ## Project structure
 

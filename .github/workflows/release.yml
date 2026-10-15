@@ -1,6 +1,8 @@
 name: Release
 
 on:
+  push:
+    branches: [dev]
   release:
     types: [published]
 
@@ -59,6 +61,10 @@ jobs:
       - name: Upload package to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event_name == 'push' && 'dev' || github.event.release.tag_name }}
+          name: ${{ github.event_name == 'push' && 'Dev snapshot' || github.event.release.name }}
+          prerelease: ${{ github.event_name == 'push' }}
+          make_latest: ${{ github.event_name != 'push' }}
           files: |
             target/secure-async-employee-api-*.jar
             db/setup.sql
