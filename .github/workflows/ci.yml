@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: app_db
+          POSTGRES_USER: app_user
+          POSTGRES_PASSWORD: ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app_user -d app_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: app_db
+      DB_USERNAME: app_user
+      DB_PASSWORD: ci-password
+      TEST_DB_SCHEMA: app_schema_test
+      JWT_SECRET: ci-jwt-signing-secret-0123456789abcdef
+      ASSESSMENT_CLIENT_SECRET_HASH: dummy-hash-overridden-by-tests
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Create integration-test schema
+        env:
+          PGPASSWORD: ci-password
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+          psql -h localhost -U app_user -d app_db -c "CREATE SCHEMA IF NOT EXISTS app_schema_test AUTHORIZATION app_user;"
+
+      - name: Build and test
+        run: mvn -B verify --file pom.xml
