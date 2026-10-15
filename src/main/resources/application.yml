@@ -26,6 +26,9 @@ spring:
     deserialization:
       fail-on-null-for-primitives: true
 
+springdoc:
+  paths-to-match: /api/v1/**
+
 logging:
   level:
     # Logs raw SQL error details such as "Key (pan)=(...) already exists"; failures are logged safely by the app.

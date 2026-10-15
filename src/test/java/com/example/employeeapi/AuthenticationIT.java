@@ -124,6 +124,16 @@ class AuthenticationIT extends AbstractIntegrationTest {
         getStatus(readOnly, "TXN-0000000000000000").andExpect(status().isNotFound());
     }
 
+    @Test
+    void openApiDocsArePublic() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/v1/auth/token']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/transactions/init']").exists())
+                .andExpect(jsonPath("$.components.schemas.TokenRequest.properties.client_id").exists())
+                .andExpect(jsonPath("$.components.schemas.TokenRequest.properties.clientId").doesNotExist());
+    }
+
     private static JwtClaimsSet claims(String issuer, Instant issuedAt, Instant expiresAt) {
         return JwtClaimsSet.builder()
                 .issuer(issuer)

@@ -60,6 +60,36 @@ unset A S
 
 The app reads the hashes only at startup. After changing them in `.env`, stop the app, run `set -a; source .env; set +a` again, and restart it. Otherwise token requests fail.
 
+### Add another test client
+
+The app already has `assessment_client` and `secondary_client`. To add a third one:
+
+1. Generate a plaintext secret and its hash:
+
+```bash
+SECRET=$(openssl rand -hex 16)
+echo "$SECRET"
+htpasswd -bnBC 12 "" "$SECRET" | tr -d ':\n'; echo
+```
+
+2. Append `your_client_id=<plaintext>` to `.env.secrets`. Put the hash in `.env` as a new variable, for example `THIRD_CLIENT_SECRET_HASH='...'` (single quotes).
+
+3. Add a client entry under `app.security.clients` in `src/main/resources/application.yml`:
+
+```yaml
+      - client-id: ${THIRD_CLIENT_ID:your_client_id}
+        secret-hash: ${THIRD_CLIENT_SECRET_HASH}
+        scopes: [transactions:write, transactions:read]
+```
+
+4. Restart the app with `.env` sourced. Token request:
+
+```json
+{ "client_id": "your_client_id", "client_secret": "<plaintext>" }
+```
+
+Do not send `clientId` / `clientSecret`. The API and Swagger both use snake_case.
+
 ## 3. Run and test
 
 ```bash
@@ -69,6 +99,8 @@ mvn test                      # unit tests (no database needed)
 mvn verify                    # unit and integration tests (uses PostgreSQL)
 mvn spring-boot:run           # start the API on http://localhost:8080
 ```
+
+Interactive docs: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html) (OpenAPI at `/v3/api-docs`). Call **POST /api/v1/auth/token** first with snake_case fields (`client_id`, `client_secret`), copy `access_token`, click **Authorize**, paste the token with no `Bearer ` prefix, then run init, submit, status, and read in that order.
 
 ### Run a packaged jar
 

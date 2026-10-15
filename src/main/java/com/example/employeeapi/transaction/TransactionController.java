@@ -4,6 +4,7 @@ import com.example.employeeapi.employee.EmployeeQueryService;
 import com.example.employeeapi.employee.EmployeeRequest;
 import com.example.employeeapi.employee.EmployeeResponse;
 import com.example.employeeapi.employee.EmployeeSubmissionService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,6 +20,7 @@ import java.net.URI;
 
 @RestController
 @RequestMapping("/api/v1/transactions")
+@SecurityRequirement(name = "bearer-jwt")
 public class TransactionController {
 
     private final TransactionService transactionService;
