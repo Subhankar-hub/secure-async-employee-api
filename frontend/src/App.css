@@ -1,0 +1,115 @@
+.page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.75rem;
+}
+
+h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.lede {
+  margin: 0 0 1.5rem;
+  color: #444;
+}
+
+.card {
+  border: 1px solid #d8d8d8;
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+  background: #fff;
+}
+
+form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+}
+
+input,
+select,
+button {
+  font: inherit;
+  padding: 0.45rem 0.55rem;
+}
+
+button {
+  width: fit-content;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+code {
+  font-size: 0.85em;
+}
+
+.ok {
+  color: #146c2e;
+}
+
+.err,
+.field-err {
+  color: #b42318;
+  margin: 0;
+}
+
+.field-err {
+  font-size: 0.8rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #eee;
+}
+
+.status-completed {
+  background: #d1fadf;
+  color: #085d3a;
+}
+
+.status-failed {
+  background: #fee4e2;
+  color: #b42318;
+}
+
+.status-accepted,
+.status-processing,
+.status-initialized {
+  background: #e0eaff;
+  color: #1849a9;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: 8rem 1fr;
+  gap: 0.35rem 0.75rem;
+  margin: 0.75rem 0 0;
+}
+
+dt {
+  color: #555;
+}
+
+dd {
+  margin: 0;
+}

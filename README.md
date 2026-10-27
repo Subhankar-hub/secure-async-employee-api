@@ -167,6 +167,26 @@ If the token fails, everything after it also fails. Init returns `401`, `TXN` st
 - `.env.secrets` is missing or was regenerated without updating the hashes in `.env`.
 - The hashes in `.env` were changed but the app was not restarted. It reads them only at startup.
 
+## Frontend
+
+A Vite + React + TypeScript UI lives in `frontend/`. It requests a token on load using Vite env vars, then walks through init, submit, status polling, and reading the saved employee. Dev traffic to `/api` is proxied to `http://localhost:8080`.
+
+Start the API first (`mvn spring-boot:run` with `.env` sourced). Then:
+
+```bash
+cd frontend
+cp .env.example .env
+```
+
+Set `VITE_CLIENT_SECRET` in `frontend/.env` to the plaintext `assessment_client` value from `.env.secrets`. Leave `VITE_CLIENT_ID=assessment_client`.
+
+```bash
+npm install
+npm run dev
+```
+
+Open http://localhost:5173. Do not commit `frontend/.env`; Vite embeds `VITE_*` values in the browser bundle.
+
 ## Endpoints
 
 Every endpoint except the token endpoint needs the header `Authorization: Bearer <token>`.
