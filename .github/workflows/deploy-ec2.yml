@@ -1,0 +1,43 @@
+name: Deploy API to EC2
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Package
+        run: mvn -B -DskipTests package --file pom.xml
+
+      - name: Copy jar to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "target/secure-async-employee-api-*.jar"
+          target: "/tmp"
+
+      - name: Install jar and restart
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            JAR=$(ls /tmp/secure-async-employee-api-*.jar | grep -v sources | grep -v javadoc)
+            mkdir -p /opt/employee-api
+            cp "$JAR" /opt/employee-api/app.jar
+            sudo systemctl restart employee-api
