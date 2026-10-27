@@ -279,6 +279,16 @@ GitHub Actions workflows live in `.github/workflows/`.
 
 - **CI** (`ci.yml`) runs on pull requests and on pushes to `main`/`dev`. It builds with Java 21 and runs `mvn verify` (unit tests and integration tests) against PostgreSQL 17. Integration tests use the `app_schema_test` schema created by the workflow; they do not read `.env` or `.env.secrets`.
 - **Release** (`release.yml`) runs on every push to `dev`, and also when you publish a GitHub Release. It rebuilds, re-runs `mvn verify`, and attaches the runnable jar (`target/secure-async-employee-api-<version>.jar`), `db/setup.sql`, and `.env.example`.
+- **Deploy API** (`deploy-ec2.yml`) copies the jar to EC2 and restarts `employee-api`. Repository secrets: `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`.
+- **Deploy frontend** (`deploy-frontend-ec2.yml`) builds the Vite app on pushes to `dev` that touch `frontend/**` (or via **workflow_dispatch**), copies `frontend/dist` to `/var/www/employee-ui`, and reloads Nginx. Leave `VITE_API_BASE_URL` empty so the UI calls `/api` on the same host. Extra secrets (set once in the repo):
+
+```bash
+gh secret set VITE_CLIENT_ID --body assessment_client
+# plaintext assessment_client value from /opt/employee-api/.env.secrets on the instance
+gh secret set VITE_CLIENT_SECRET
+```
+
+Vite embeds `VITE_CLIENT_SECRET` in the browser bundle. Do not treat a public host as production.
 
 Pushes to `dev` update a rolling prerelease tagged `dev` (not marked as Latest). A versioned package still comes from **Releases → Draft a new release**. Recipients need Java 21 and PostgreSQL; follow **Running the jar on another machine** above.
 

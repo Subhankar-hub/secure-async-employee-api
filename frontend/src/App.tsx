@@ -180,7 +180,8 @@ export default function App() {
         {authState === 'missing-env' && (
           <p>
             Copy <code>frontend/.env.example</code> to <code>frontend/.env</code>, set{' '}
-            <code>VITE_CLIENT_SECRET</code> from <code>.env.secrets</code>, then restart{' '}
+            <code>VITE_CLIENT_SECRET</code> from <code>.env.secrets</code> and{' '}
+            <code>VITE_API_BASE_URL</code> to the EC2 API URL, then restart{' '}
             <code>npm run dev</code>.
           </p>
         )}
